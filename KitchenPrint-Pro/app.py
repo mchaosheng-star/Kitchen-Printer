@@ -1,4 +1,5 @@
-# app.py
+from __future__ import annotations
+
 from flask import Flask, request, jsonify, send_from_directory, make_response
 from datetime import datetime, timedelta
 import copy
