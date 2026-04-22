@@ -91,11 +91,17 @@ Step 9: Test from iPhone/iPad
 - Look for printer name: KitchenPrintPro
 
 Step 10: If iPhone/iPad still cannot see KitchenPrintPro
-Open PowerShell as Administrator and run:
+Open a command prompt as Administrator and run the firewall commands for your Windows version:
 
+Windows Vista / 7 / 8 / 10 / 11:
 netsh advfirewall firewall add rule name="KitchenPrint AirPrint mDNS" dir=in action=allow protocol=UDP localport=5353
 netsh advfirewall firewall add rule name="KitchenPrint IPP" dir=in action=allow protocol=TCP localport=8631
 netsh advfirewall firewall add rule name="KitchenPrint Web UI" dir=in action=allow protocol=TCP localport=5000
+
+Windows XP (use these instead):
+netsh firewall add portopening UDP 5353 "KitchenPrint mDNS" ENABLE ALL
+netsh firewall add portopening TCP 8631 "KitchenPrint IPP" ENABLE ALL
+netsh firewall add portopening TCP 5000 "KitchenPrint Web" ENABLE ALL
 
 Then:
 - reconnect Wi-Fi on the iPhone/iPad
@@ -135,8 +141,15 @@ Exact startup template to reuse on any restaurant PC
 
 cd "C:\Path\To\KitchenPrint-Pro"
 python -m pip install -r requirements.txt
-Get-NetIPAddress -AddressFamily IPv4 | Select-Object InterfaceIndex,IPAddress,InterfaceAlias | Format-Table -AutoSize
-$env:PRINT_CAPTURE_MDNS_HOST="REPLACE_WITH_PC_IP"
-$env:PRINT_CAPTURE_INTERFACE_INDEX="REPLACE_WITH_INTERFACE_INDEX"
+
+Then just double-click SmartLaunch.bat (it auto-detects the LAN IP).
+
+Or manually in PowerShell:
 $env:PRINT_CAPTURE_AIRPRINT_NAME="KitchenPrintPro"
+$env:PRINT_CAPTURE_USE_NATIVE_MDNS="1"
 python .\app.py
+
+On Windows XP without PowerShell, open a command prompt:
+set PRINT_CAPTURE_AIRPRINT_NAME=KitchenPrintPro
+set PRINT_CAPTURE_USE_NATIVE_MDNS=1
+python app.py
