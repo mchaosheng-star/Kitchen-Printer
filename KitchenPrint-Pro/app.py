@@ -7,6 +7,7 @@ import csv
 import difflib
 import os
 import re
+import socket
 import win32con # type: ignore
 import win32print # type: ignore
 import win32ui # type: ignore
@@ -48,6 +49,64 @@ UBER_WEBHOOK_LOCK = threading.Lock()
 UBER_WEBHOOK_EVENT_IDS = set()
 DOORDASH_WEBHOOK_LOCK = threading.Lock()
 DOORDASH_WEBHOOK_EVENT_IDS = set()
+
+_SCAN_LOCK = threading.Lock()
+_SCAN_RESULT = {"status": "idle", "printers": []}
+
+
+def _check_printer_host(ip, port, results, lock):
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.5)
+        if s.connect_ex((ip, port)) == 0:
+            try:
+                name = socket.gethostbyaddr(ip)[0]
+            except Exception:
+                name = ''
+            with lock:
+                results.append({"ip": ip, "port": port, "name": name})
+        s.close()
+    except Exception:
+        pass
+
+
+def _run_network_scan():
+    global _SCAN_RESULT
+    with _SCAN_LOCK:
+        _SCAN_RESULT = {"status": "scanning", "printers": []}
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        local_ip = '127.0.0.1'
+    prefix = local_ip.rsplit('.', 1)[0]
+    results = []
+    lock = threading.Lock()
+    threads = []
+    for i in range(1, 255):
+        ip = f"{prefix}.{i}"
+        t = threading.Thread(target=_check_printer_host, args=(ip, 9100, results, lock), daemon=True)
+        threads.append(t)
+        t.start()
+    for t in threads:
+        t.join()
+    results.sort(key=lambda x: int(x['ip'].rsplit('.', 1)[1]))
+    with _SCAN_LOCK:
+        _SCAN_RESULT = {"status": "done", "printers": results}
+
+
+@app.route('/api/scan', methods=['POST'])
+def api_scan_start():
+    threading.Thread(target=_run_network_scan, daemon=True).start()
+    return jsonify({"status": "started"})
+
+
+@app.route('/api/scan/result', methods=['GET'])
+def api_scan_result():
+    with _SCAN_LOCK:
+        return jsonify(dict(_SCAN_RESULT))
 
 # Menu cache for category lookup
 _MENU_CACHE = None
@@ -662,9 +721,65 @@ def save_menu():
         json.dump(new_menu_data, f, indent=2)
     return jsonify({"status": "success"})
 
+_RECENT_ENQUEUE_LOCK = threading.Lock()
+_RECENT_ENQUEUE = []
+_ENQUEUE_DEDUP_WINDOW_SEC = 25
+
+
+def _order_signature(order_data):
+    items = order_data.get('items', []) or []
+    if not isinstance(items, list):
+        return ""
+    parts = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        name = str(it.get('name', '')).strip().lower()
+        qty = str(it.get('quantity', 1))
+        parts.append(f"{qty}x{name}")
+    sig = "|".join(sorted(parts))
+    if not sig or sig.startswith("1xunparsed:") or "captured print job" in sig:
+        return ""
+    return sig
+
+
+def _is_recent_duplicate(order_data):
+    sig = _order_signature(order_data)
+    now_ts = time.time()
+    with _RECENT_ENQUEUE_LOCK:
+        _RECENT_ENQUEUE[:] = [
+            (t, s) for (t, s) in _RECENT_ENQUEUE
+            if now_ts - t < _ENQUEUE_DEDUP_WINDOW_SEC
+        ]
+        if sig:
+            for (_, existing) in _RECENT_ENQUEUE:
+                if existing == sig:
+                    return True
+        captured = str(order_data.get('_captured_job_path', '')).strip()
+        if not sig and captured:
+            stem = os.path.splitext(os.path.basename(captured))[0]
+            time_key = stem[:23]
+            for (_, existing) in _RECENT_ENQUEUE:
+                if existing.startswith("path:") and time_key in existing:
+                    return True
+            _RECENT_ENQUEUE.append((now_ts, f"path:{time_key}"))
+            return False
+        if sig:
+            _RECENT_ENQUEUE.append((now_ts, sig))
+    return False
+
+
 def enqueue_incoming(order_data):
     global INCOMING_NEXT_ID
     order_data = normalize_order_data(order_data)
+    if _is_recent_duplicate(order_data):
+        app.logger.info("Duplicate order suppressed (within %ds window)", _ENQUEUE_DEDUP_WINDOW_SEC)
+        return {
+            'id': 0,
+            'received_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'order': order_data,
+            'duplicate': True,
+        }
     local_cfg = _load_local_settings()
     if bool(local_cfg.get("autoAccept")):
         if not order_data.get('kitchenPrinter') and local_cfg.get('kitchenPrinter'):

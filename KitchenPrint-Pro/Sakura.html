@@ -399,6 +399,25 @@
       gap: 14px;
       align-content: start;
     }
+    .search-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .search-row .field {
+      margin: 0;
+      flex: 1;
+      min-width: 220px;
+    }
+    .search-row input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(221, 210, 198, 0.95);
+      background: rgba(255, 255, 255, 0.92);
+      font-size: 14px;
+    }
     .grid .empty-state {
       grid-column: 1 / -1;
     }
@@ -655,6 +674,37 @@
       height: 20px;
       accent-color: var(--primary);
     }
+    .printer-card {
+      border: 1px solid rgba(221,210,198,0.9);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      background: var(--card-soft);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .printer-card.assigned-kitchen { border-color: var(--primary); background: rgba(215,101,75,0.06); }
+    .printer-card.assigned-sushi   { border-color: var(--secondary); background: rgba(77,157,131,0.06); }
+    .printer-card-name { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; word-break: break-word; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .printer-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .pcard-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .pcard-badge.kitchen { background: rgba(215,101,75,0.14); color: var(--primary); }
+    .pcard-badge.sushi   { background: rgba(77,157,131,0.14); color: var(--secondary); }
+    .pcard-badge.packer  { background: rgba(100,100,200,0.12); color: #5555bb; }
+    .discover-row {
+      border: 1px solid rgba(221,210,198,0.9);
+      border-radius: 10px;
+      padding: 10px 14px;
+      background: var(--card-soft);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 13px;
+    }
+    .discover-online-dot { width:8px; height:8px; border-radius:50%; background:var(--secondary); display:inline-block; margin-right:6px; flex-shrink:0; }
     @media (max-width: 1100px) {
       body {
         flex-direction: column;
@@ -801,6 +851,12 @@
       </div>
       <div class="content-card">
         <div class="tabs" id="categories"></div>
+        <div class="search-row">
+          <div class="field" style="width:100%;">
+            <input id="itemSearch" type="text" placeholder="Search items..." autocomplete="off" />
+          </div>
+          <button class="btn secondary" id="clearSearchBtn" onclick="clearSearch()">Clear</button>
+        </div>
         <div class="grid" id="products"></div>
       </div>
     </div>
@@ -818,6 +874,20 @@
         <button class="btn secondary" onclick="closeSettings()">Close</button>
       </div>
       <div class="settings-layout">
+        <div class="settings-section">
+          <div class="settings-section-title">Quick Assign</div>
+          <div class="settings-section-note">Tap a role button to instantly assign any installed Windows printer.</div>
+          <div class="stack" id="quickAssignList"></div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Network Discovery</div>
+          <div class="settings-section-note">Scan your network to find printers by IP — helps identify which device is which.</div>
+          <button class="btn secondary small" id="scanBtn" onclick="startNetworkScan()">Scan Network</button>
+          <div id="scanStatus" style="font-size:12px;color:var(--muted);margin-top:8px;"></div>
+          <div class="stack" id="discoverList" style="margin-top:10px;"></div>
+        </div>
+
         <div class="settings-section">
           <div class="settings-section-title">Printer Assignment</div>
           <div class="settings-section-note">Choose which real device is the Kitchen printer and which is the Sushi printer.</div>
@@ -905,6 +975,7 @@
     let orderNotes = localStorage.getItem("orderNotes") || "";
     let orderNumber = Number(localStorage.getItem("orderNumber") || "1") || 1;
     let lineCounter = Number(localStorage.getItem("lineCounter") || "0") || 0;
+    let itemSearch = localStorage.getItem("itemSearch") || "";
     let kitchenPrinter = localStorage.getItem("kitchenPrinter") || localStorage.getItem("selectedPrinter") || "";
     let sushiPrinter = localStorage.getItem("sushiPrinter") || "";
     let packerPrinter = localStorage.getItem("packerPrinter") || "";
@@ -1012,6 +1083,32 @@
       if (c.includes("side")) return "➕";
       if (c.includes("sushi")) return "🍣";
       return "📋";
+    }
+
+    function itemIcon(item, category) {
+      const name = String((item && item.name) || "").toLowerCase();
+      const cat = String(category || item && item.category || "").toLowerCase();
+
+      if (cat.includes("beverage") || name.includes("coke") || name.includes("sprite") || name.includes("soda")) return "🥤";
+      if (cat.includes("soup")) return "🥣";
+      if (cat.includes("salad") || name.includes("salad")) return "🥗";
+      if (cat.includes("fried rice") || name.includes("fried rice") || name.includes("rice")) return "🍚";
+      if (cat.includes("noodle") || name.includes("noodle") || name.includes("pad thai") || name.includes("pad see") || name.includes("hibachi noodle")) return "🍜";
+      if (cat.includes("teppanyaki") || cat.includes("hibachi")) return "🔥";
+      if (name.includes("tempura")) return "🍤";
+      if (name.includes("shrimp") || name.includes("prawn")) return "🍤";
+      if (name.includes("crab")) return "🦀";
+      if (name.includes("scallop")) return "🦪";
+      if (name.includes("lobster")) return "🦞";
+      if (name.includes("eel") || name.includes("unagi")) return "🐟";
+      if (cat.includes("sashimi") || name.includes("sashimi")) return "🐟";
+      if (cat.includes("sushi") || name.includes("sushi") || name.includes("nigiri")) return "🍣";
+      if (name.includes("roll") || cat.includes("roll")) return "🍣";
+      if (name.includes("chicken")) return "🍗";
+      if (name.includes("beef") || name.includes("steak") || name.includes("filet")) return "🥩";
+      if (name.includes("tofu") || name.includes("vegetable")) return "🥦";
+      if (cat.includes("appetiz") || name.includes("gyoza") || name.includes("shumai") || name.includes("rangoon")) return "🥟";
+      return "🍽️";
     }
 
     function persistLocalOrder() {
@@ -1131,9 +1228,29 @@
       menu = await res.json();
       const categories = Object.keys(menu || {});
       selectedCategory = categories[0] || null;
+      initSearchUI();
       renderCategories();
       renderProducts();
       renderCurrentOrder();
+    }
+
+    function initSearchUI() {
+      const input = document.getElementById("itemSearch");
+      if (!input) return;
+      input.value = itemSearch || "";
+      input.oninput = () => {
+        itemSearch = input.value || "";
+        localStorage.setItem("itemSearch", itemSearch);
+        renderProducts();
+      };
+    }
+
+    function clearSearch() {
+      itemSearch = "";
+      localStorage.setItem("itemSearch", "");
+      const input = document.getElementById("itemSearch");
+      if (input) input.value = "";
+      renderProducts();
     }
 
     function renderCategories() {
@@ -1156,16 +1273,25 @@
     function renderProducts() {
       const el = document.getElementById("products");
       el.innerHTML = "";
-      const items = menu[selectedCategory] || [];
+      const q = String(itemSearch || "").trim().toLowerCase();
+      let items = menu[selectedCategory] || [];
+      if (q) {
+        items = items.filter(item => {
+          const en = String(item.name || "").toLowerCase();
+          const zh = String(item.nameZh || "").toLowerCase();
+          return en.includes(q) || zh.includes(q);
+        });
+      }
       if (!items.length) {
-        renderEmptyState(el, "No items here", "Choose another category or update the menu.");
+        renderEmptyState(el, q ? "No matches" : "No items here", q ? "Try a different search." : "Choose another category or update the menu.");
         return;
       }
       items.forEach(item => {
         const card = document.createElement("div");
         card.className = "product";
         const zh = String(item.nameZh || "").trim();
-        card.innerHTML = `<div class="product-name">${escapeHtml(item.name)}</div>${zh ? `<div class="product-subtitle">${escapeHtml(zh)}</div>` : ""}`;
+        const ic = itemIcon(item, selectedCategory);
+        card.innerHTML = `<div class="product-name"><span aria-hidden="true" style="margin-right:8px;">${ic}</span>${escapeHtml(item.name)}</div>${zh ? `<div class="product-subtitle">${escapeHtml(zh)}</div>` : ""}`;
         card.onclick = () => addToOrder(item, selectedCategory);
         el.appendChild(card);
       });
@@ -1532,6 +1658,9 @@
       menu = liveMenu || menu;
       migrateLegacyPrinterMappings();
 
+      _cachedPrinters = Array.isArray(printers) ? printers : [];
+      renderQuickAssign(_cachedPrinters);
+
       const printerOptions = `<option value="">(none)</option>` + (Array.isArray(printers) ? printers.map(p => `<option value="${String(p).replace(/"/g, "&quot;")}">${p}</option>`).join("") : "");
       const kitchenSelect = document.getElementById("kitchenPrinter");
       const sushiSelect = document.getElementById("sushiPrinter");
@@ -1610,6 +1739,106 @@
 
     function closeSettings() {
       document.getElementById("settingsModal").style.display = "none";
+      if (_scanPollTimer) { clearInterval(_scanPollTimer); _scanPollTimer = null; }
+    }
+
+    let _cachedPrinters = [];
+    let _scanPollTimer = null;
+
+    function renderQuickAssign(printers) {
+      const wrap = document.getElementById("quickAssignList");
+      if (!wrap) return;
+      wrap.innerHTML = "";
+      if (!Array.isArray(printers) || !printers.length) {
+        wrap.innerHTML = '<div class="settings-map-empty">No Windows printers installed.</div>';
+        return;
+      }
+      printers.forEach(p => {
+        const isK = p === kitchenPrinter;
+        const isS = p === sushiPrinter;
+        const isPk = p === packerPrinter;
+        const row = document.createElement("div");
+        row.className = "printer-card" + (isK ? " assigned-kitchen" : isS ? " assigned-sushi" : "");
+        row.innerHTML = `
+          <div class="printer-card-name">
+            ${escapeHtml(p)}
+            ${isK  ? '<span class="pcard-badge kitchen">Kitchen</span>'  : ""}
+            ${isS  ? '<span class="pcard-badge sushi">Sushi</span>'      : ""}
+            ${isPk ? '<span class="pcard-badge packer">Packer</span>'    : ""}
+          </div>
+          <div class="printer-card-actions">
+            <button class="btn small ${isK ? 'primary' : 'secondary'}" onclick="quickAssign(${JSON.stringify(p)},'kitchen')">Kitchen</button>
+            <button class="btn small ${isS ? 'green'   : 'secondary'}" onclick="quickAssign(${JSON.stringify(p)},'sushi')">Sushi</button>
+            <button class="btn small ${isPk ? 'primary' : 'secondary'}" onclick="quickAssign(${JSON.stringify(p)},'packer')">Packer</button>
+          </div>`;
+        wrap.appendChild(row);
+      });
+    }
+
+    function quickAssign(printerName, role) {
+      if (role === "kitchen") {
+        kitchenPrinter = printerName;
+        const s = document.getElementById("kitchenPrinter");
+        if (s) s.value = printerName;
+      } else if (role === "sushi") {
+        sushiPrinter = printerName;
+        const s = document.getElementById("sushiPrinter");
+        if (s) s.value = printerName;
+      } else if (role === "packer") {
+        packerPrinter = printerName;
+        const s = document.getElementById("packerPrinter");
+        if (s) s.value = printerName;
+      }
+      persistPrinterRouting();
+      saveServerSettings();
+      renderQuickAssign(_cachedPrinters);
+      showToast(printerName + " set as " + role);
+    }
+
+    async function startNetworkScan() {
+      const btn = document.getElementById("scanBtn");
+      const status = document.getElementById("scanStatus");
+      const list = document.getElementById("discoverList");
+      if (btn) btn.disabled = true;
+      if (status) status.textContent = "Scanning network... (~10 sec)";
+      if (list) list.innerHTML = "";
+      try { await fetch("/api/scan", { method: "POST" }); } catch(e) {}
+      if (_scanPollTimer) clearInterval(_scanPollTimer);
+      _scanPollTimer = setInterval(async () => {
+        try {
+          const res = await fetch("/api/scan/result");
+          const data = await res.json();
+          if (data.status === "done") {
+            clearInterval(_scanPollTimer);
+            _scanPollTimer = null;
+            if (btn) btn.disabled = false;
+            if (status) status.textContent = "Found " + data.printers.length + " printer(s) on port 9100.";
+            renderDiscoveryResults(data.printers);
+          }
+        } catch(e) {}
+      }, 1500);
+    }
+
+    function renderDiscoveryResults(printers) {
+      const wrap = document.getElementById("discoverList");
+      if (!wrap) return;
+      wrap.innerHTML = "";
+      if (!printers || !printers.length) {
+        wrap.innerHTML = '<div class="settings-map-empty">No printers found on port 9100. Make sure they are powered on.</div>';
+        return;
+      }
+      printers.forEach(p => {
+        const row = document.createElement("div");
+        row.className = "discover-row";
+        row.innerHTML = `
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="discover-online-dot"></span>
+            <strong>${escapeHtml(p.ip)}</strong>
+            ${p.name ? `<span style="color:var(--muted);font-size:12px;">${escapeHtml(p.name)}</span>` : ""}
+          </div>
+          <span style="font-size:11px;color:var(--muted);">port 9100</span>`;
+        wrap.appendChild(row);
+      });
     }
 
     function openOptions(item, category) {

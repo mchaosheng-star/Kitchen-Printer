@@ -804,13 +804,55 @@
       "id": 22132,
       "name": "Tepp Dinner Comb pick 2",
       "price": 43.95,
-      "nameZh": "铁板晚餐组合（任选2款）"
+      "nameZh": "铁板晚餐组合（任选2款）",
+      "options": [
+        { "name": "Vegetable & Tofu" },
+        { "name": "Chicken" },
+        { "name": "Calamari" },
+        { "name": "Salmon" },
+        { "name": "Red Snapper" },
+        { "name": "Steak" },
+        { "name": "Shrimp" },
+        { "name": "Golden Shrimp" },
+        { "name": "Garlic Shrimp" },
+        { "name": "Scallop" },
+        { "name": "Filet Mignon" },
+        { "name": "Twin Tuna" },
+        { "name": "Seabass" },
+        { "name": "Garlic Scallop" },
+        { "name": "Golden Scallop" },
+        { "name": "Lamb Chop" },
+        { "name": "Twin Lobster" }
+      ],
+      "selectMin": 2,
+      "selectMax": 2
     },
     {
       "id": 22133,
       "name": "Tepp Dinner Comb pick 3",
       "price": 50.95,
-      "nameZh": "铁板晚餐组合（任选3款）"
+      "nameZh": "铁板晚餐组合（任选3款）",
+      "options": [
+        { "name": "Vegetable & Tofu" },
+        { "name": "Chicken" },
+        { "name": "Calamari" },
+        { "name": "Salmon" },
+        { "name": "Red Snapper" },
+        { "name": "Steak" },
+        { "name": "Shrimp" },
+        { "name": "Golden Shrimp" },
+        { "name": "Garlic Shrimp" },
+        { "name": "Scallop" },
+        { "name": "Filet Mignon" },
+        { "name": "Twin Tuna" },
+        { "name": "Seabass" },
+        { "name": "Garlic Scallop" },
+        { "name": "Golden Scallop" },
+        { "name": "Lamb Chop" },
+        { "name": "Twin Lobster" }
+      ],
+      "selectMin": 3,
+      "selectMax": 3
     },
     {
       "id": 22134,
@@ -1002,25 +1044,57 @@
       "id": 22008,
       "name": "Pad See Eiw",
       "price": 15.95,
-      "nameZh": "泰式炒河粉"
+      "nameZh": "泰式炒河粉",
+      "options": [
+        { "name": "Chicken" },
+        { "name": "Beef" },
+        { "name": "Shrimp" },
+        { "name": "Combination" }
+      ],
+      "selectMin": 1,
+      "selectMax": 1
     },
     {
       "id": 22009,
       "name": "Thai Crazy Noodle",
       "price": 15.95,
-      "nameZh": "泰式疯狂面"
+      "nameZh": "泰式疯狂面",
+      "options": [
+        { "name": "Chicken" },
+        { "name": "Beef" },
+        { "name": "Shrimp" },
+        { "name": "Combination" }
+      ],
+      "selectMin": 1,
+      "selectMax": 1
     },
     {
       "id": 22010,
       "name": "Pad Thai Noodle",
       "price": 15.95,
-      "nameZh": "泰式炒面"
+      "nameZh": "泰式炒面",
+      "options": [
+        { "name": "Chicken" },
+        { "name": "Beef" },
+        { "name": "Shrimp" },
+        { "name": "Combination" }
+      ],
+      "selectMin": 1,
+      "selectMax": 1
     },
     {
       "id": 22011,
       "name": "Hibachi Noodle",
       "price": 15.95,
-      "nameZh": "铁板面"
+      "nameZh": "铁板面",
+      "options": [
+        { "name": "Chicken" },
+        { "name": "Beef" },
+        { "name": "Shrimp" },
+        { "name": "Combination" }
+      ],
+      "selectMin": 1,
+      "selectMax": 1
     }
   ],
   "Fried Rice": [
@@ -1028,19 +1102,43 @@
       "id": 22001,
       "name": "Thai Fried Rice",
       "price": 13.95,
-      "nameZh": "泰式炒饭"
+      "nameZh": "泰式炒饭",
+      "options": [
+        { "name": "Chicken" },
+        { "name": "Beef" },
+        { "name": "Shrimp" },
+        { "name": "Combination" }
+      ],
+      "selectMin": 1,
+      "selectMax": 1
     },
     {
       "id": 22002,
       "name": "Pineapple Fried Rice",
       "price": 13.95,
-      "nameZh": "菠萝炒饭"
+      "nameZh": "菠萝炒饭",
+      "options": [
+        { "name": "Chicken" },
+        { "name": "Beef" },
+        { "name": "Shrimp" },
+        { "name": "Combination" }
+      ],
+      "selectMin": 1,
+      "selectMax": 1
     },
     {
       "id": 22004,
       "name": "Hibachi Fried Rice",
       "price": 13.95,
-      "nameZh": "铁板炒饭"
+      "nameZh": "铁板炒饭",
+      "options": [
+        { "name": "Chicken" },
+        { "name": "Beef" },
+        { "name": "Shrimp" },
+        { "name": "Combination" }
+      ],
+      "selectMin": 1,
+      "selectMax": 1
     }
   ],
   "Beverage": [

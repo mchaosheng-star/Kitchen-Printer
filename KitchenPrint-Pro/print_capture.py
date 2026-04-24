@@ -324,6 +324,94 @@ def _menu_item_for_name(item_name: str):
     return None
 
 
+def scan_text_for_menu_items(text: str) -> list[dict]:
+    """
+    Aggressive fallback: scan the full extracted/OCR text for any menu item name
+    anywhere (case-insensitive, whitespace-normalized). Extracts quantities from
+    patterns like '2x', '2 x', 'Qty 2', '(3)' near the match.
+    Returns deduped items with quantities.
+    """
+    menu = _load_menu_index()
+    if not menu or not text:
+        return []
+    norm_text = _normalize_menu_lookup_name(text)
+    if not norm_text:
+        return []
+    found = {}
+    sorted_keys = sorted(menu.keys(), key=lambda k: -len(k))
+    used_spans = []
+    for key in sorted_keys:
+        if not key or len(key) < 3:
+            continue
+        start = 0
+        while True:
+            idx = norm_text.find(key, start)
+            if idx < 0:
+                break
+            end = idx + len(key)
+            overlap = False
+            for (s, e) in used_spans:
+                if not (end <= s or idx >= e):
+                    overlap = True
+                    break
+            if overlap:
+                start = end
+                continue
+            used_spans.append((idx, end))
+            qty = _extract_nearby_quantity(text, menu[key]["name"])
+            mi = menu[key]
+            if mi["name"] in found:
+                found[mi["name"]]["quantity"] += qty
+            else:
+                found[mi["name"]] = {
+                    "name": mi["name"],
+                    "nameZh": mi.get("nameZh", ""),
+                    "category": mi.get("category", ""),
+                    "quantity": qty,
+                    "price": 0.0,
+                    "selectedOptions": [],
+                    "comment": "",
+                }
+            start = end
+    return list(found.values())
+
+
+def _extract_nearby_quantity(original_text: str, item_name: str) -> int:
+    """Look for qty patterns like '2x Dragon Roll' or 'Dragon Roll x 2' near the name."""
+    if not original_text or not item_name:
+        return 1
+    pattern = re.compile(
+        r"(?:(\d+)\s*[xX]\s+|\bqty\s*[:=]?\s*(\d+)\s+|^\s*(\d+)\s+)"
+        + re.escape(item_name),
+        re.I | re.M,
+    )
+    m = pattern.search(original_text)
+    if m:
+        for g in m.groups():
+            if g and g.isdigit():
+                try:
+                    n = int(g)
+                    if 1 <= n <= 99:
+                        return n
+                except Exception:
+                    pass
+    suffix = re.compile(
+        re.escape(item_name) + r"\s*(?:x\s*(\d+)|\((\d+)\))",
+        re.I,
+    )
+    m = suffix.search(original_text)
+    if m:
+        for g in m.groups():
+            if g and g.isdigit():
+                try:
+                    n = int(g)
+                    if 1 <= n <= 99:
+                        return n
+                except Exception:
+                    pass
+    return 1
+
+
 def _attach_menu_metadata(item: dict) -> dict:
     menu_item = _menu_item_for_name(item.get("name", ""))
     if not menu_item:
@@ -618,7 +706,7 @@ def _ocr_with_rapidocr(data: bytes) -> str:
             return ""
         return "\n".join(str(line[1]) for line in result if len(line) > 1 and line[1])
     except Exception as e:
-        logger.exception("RapidOCR failed: %s", e)
+        logger.warning("RapidOCR unavailable (skipping): %s", e)
         return ""
 
 
@@ -626,11 +714,26 @@ def _ocr_with_tesseract(data: bytes) -> str:
     try:
         from PIL import Image  # type: ignore
         import pytesseract  # type: ignore
-    except Exception:
+    except Exception as e:
+        logger.warning("Tesseract not available (pip install pytesseract + pillow): %s", e)
         return ""
+    tess_cmd = os.environ.get("TESSERACT_CMD", "").strip()
+    if tess_cmd and os.path.exists(tess_cmd):
+        pytesseract.pytesseract.tesseract_cmd = tess_cmd
+    else:
+        for candidate in (
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+        ):
+            if os.path.exists(candidate):
+                pytesseract.pytesseract.tesseract_cmd = candidate
+                break
     try:
         image = Image.open(io.BytesIO(data)).convert("RGB")
         return pytesseract.image_to_string(image)
+    except pytesseract.TesseractNotFoundError:
+        logger.warning("Tesseract binary not installed. Download from: https://github.com/UB-Mannheim/tesseract/wiki")
+        return ""
     except Exception as e:
         logger.exception("Tesseract OCR failed: %s", e)
         return ""
@@ -643,13 +746,27 @@ def build_order_from_pdf(path: str) -> tuple[dict, str]:
     items = extract_items_from_text(text)
     comment = extract_comment_from_text(text)
     if not items:
+        items = scan_text_for_menu_items(text)
+        if items:
+            logger.info("Menu scanner recovered %d items from %s", len(items), os.path.basename(path))
+    if not items:
         base = os.path.basename(path)
+        text_len = len(text or "")
+        logger.warning(
+            "No items parsed from %s (text_len=%d). Text preview: %r",
+            base, text_len, (text or "")[:300]
+        )
+        fallback_note = (
+            "Parser could not extract menu items. "
+            f"Text extracted: {text_len} chars. "
+            "Check data/print_jobs/{}.txt".format(base)
+        )
         items = [{
-            "name": f"Captured print job {base}",
+            "name": f"UNPARSED: {base}",
             "quantity": 1,
             "price": 0.0,
             "selectedOptions": [],
-            "comment": "",
+            "comment": fallback_note,
         }]
     order_data = {
         "number": number,
@@ -695,12 +812,20 @@ def parse_receipt_text_to_order(text: str, source: str, fallback_number: Optiona
     if not items and lines:
         items = _fallback_items_from_lines(lines)
     if not items:
+        items = scan_text_for_menu_items(text)
+        if items:
+            logger.info("Menu scanner recovered %d items from raw text", len(items))
+    if not items:
+        logger.warning(
+            "No items parsed from text (len=%d). Preview: %r",
+            len(text or ""), (text or "")[:300]
+        )
         items = [{
-            "name": f"Captured print job {extract_order_number(text, fallback_number)}",
+            "name": f"UNPARSED: {extract_order_number(text, fallback_number)}",
             "quantity": 1,
             "price": 0.0,
             "selectedOptions": [],
-            "comment": "",
+            "comment": "Parser could not extract menu items from the raw print job",
         }]
 
     source_name = detect_order_source(text, fallback=source)
