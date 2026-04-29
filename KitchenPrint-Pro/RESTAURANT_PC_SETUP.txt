@@ -1,155 +1,216 @@
-KitchenPrint-Pro Full Setup Guide for a New Restaurant PC
-
-Goal:
-Make an iPhone/iPad on the same Wi-Fi see "KitchenPrintPro" as an AirPrint printer and send print jobs into KitchenPrint-Pro.
-
-Requirements:
-- Windows PC
-- iPhone/iPad on the same Wi-Fi as the PC
-- KitchenPrint-Pro project folder on the PC
-- Python 3 installed
-
-Step 1: Copy the project to the PC
-Put the KitchenPrint-Pro folder somewhere on the PC, for example:
-
-C:\Users\YourName\Desktop\KitchenPrint-Pro
-
-Step 2: Install Python
-Install Python 3 for Windows.
-Important: during install, enable "Add Python to PATH".
-
-Verify:
-
-python --version
-
-Step 3: Open PowerShell in the project folder
-Example:
-
-cd "C:\Users\YourName\Desktop\KitchenPrint-Pro"
-
-Step 4: Install Python dependencies
-Run:
-
-python -m pip install -r requirements.txt
-
-Step 5: Find the correct LAN IP address and interface index
-Run:
-
-Get-NetIPAddress -AddressFamily IPv4 | Select-Object InterfaceIndex,IPAddress,InterfaceAlias | Format-Table -AutoSize
+KitchenPrint-Pro - Restaurant PC Setup Guide
+============================================================
+Target PC: MCPOSE
+OS: Windows Embedded Standard (32-bit, Windows 7 SP1)
+CPU: Intel Celeron J1900 @ 1.99 GHz
+RAM: 4 GB (2.89 GB usable)
+============================================================
 
 
-CMD run admin
+STEP 1 - Install Python 3.8.10 (32-bit)
+----------------------------------------
+Windows Embedded Standard is 32-bit. You MUST use the 32-bit installer.
 
-netsh interface ipv4 show interfaces
+Download link (32-bit):
+  https://www.python.org/ftp/python/3.8.10/python-3.8.10.exe
+
+During install:
+  - Check "Add Python to PATH"  <-- REQUIRED
+  - Check "Install for all users" (recommended)
+
+Verify in a command prompt:
+  python --version
+  Should show: Python 3.8.10
 
 
-Find the row for the network adapter the PC is actually using, usually "Wi-Fi".
+STEP 2 - Copy the project to the PC
+-------------------------------------
+Copy the entire KitchenPrint-Pro folder to:
+  C:\KitchenPrint-Pro
 
-Example output:
+Or wherever you want. Just note the path.
 
-15   192.168.0.215   Wi-Fi
 
-In this example:
-- InterfaceIndex = 15
-- IPAddress = 192.168.0.215
+STEP 3 - First Launch (auto-installs everything)
+--------------------------------------------------
+Double-click SmartLaunch.bat
 
-Step 6: Start KitchenPrint-Pro with the correct AirPrint settings
-Replace the values below with the real IPAddress and InterfaceIndex from Step 5.
+On first run it will:
+  1. Detect that packages are not installed
+  2. Upgrade pip
+  3. Install all required Python packages from requirements.txt
+  4. Open firewall ports automatically
+  5. Start the server
 
-$env:PRINT_CAPTURE_MDNS_HOST="192.168.1.201"
-$env:PRINT_CAPTURE_INTERFACE_INDEX="15"
-$env:PRINT_CAPTURE_AIRPRINT_NAME="KitchenPrintPro"
-$env:PRINT_CAPTURE_USE_NATIVE_MDNS="1"
-python .\app.py
+The window title will show [MCPOSE] to confirm the correct PC.
 
-Keep this PowerShell window open.
+After the first run, a file "data\.installed" is created.
+Future launches skip the install step and start immediately.
 
-Step 7: What should appear when it starts correctly
-You should see lines similar to:
+If you ever need to reinstall packages (after update), delete:
+  data\.installed
+Then run SmartLaunch.bat again.
 
-IPP receiver listening on 0.0.0.0:8631
-AirPrint advertise IP 192.168.0.215 interface_index=15
-AirPrint mDNS advertised as KitchenPrintPro on 192.168.0.215
-Running on http://127.0.0.1:5000
-Running on http://192.168.0.215:5000
 
-Step 8: Test from the PC
-Open this in a browser on the PC:
+STEP 4 - Install Tesseract OCR (for PDF order parsing)
+--------------------------------------------------------
+Required for reading order PDFs from UberEats / DoorDash AirPrint.
 
-http://127.0.0.1:5000
+Download (Windows 32-bit compatible):
+  https://github.com/UB-Mannheim/tesseract/wiki
+  Download the 32-bit installer: tesseract-ocr-w32-setup-*.exe
 
-You can also test from another device on the same network:
+Install to the default location:
+  C:\Program Files (x86)\Tesseract-OCR
 
-http://192.168.0.215:5000
+SmartLaunch.bat auto-detects this path. No extra config needed.
 
-Replace the IP with the restaurant PC's real IP.
 
-Step 9: Test from iPhone/iPad
-- Make sure the iPhone/iPad is on the same Wi-Fi as the PC
-- Open an app that supports printing
-- Tap Print
-- Look for printer name: KitchenPrintPro
+STEP 5 - Install Ghostscript (for image-based PDFs)
+-----------------------------------------------------
+Some AirPrint PDFs are image-based and cannot be read by text extraction alone.
+Ghostscript renders them to images, which Tesseract then reads.
 
-Step 10: If iPhone/iPad still cannot see KitchenPrintPro
-Open a command prompt as Administrator and run the firewall commands for your Windows version:
+Download (32-bit Windows):
+  https://github.com/ArtifexSoftware/ghostpdl-downloads/releases
+  Download: gs*.w32.exe  (the 32-bit version)
 
-Windows Vista / 7 / 8 / 10 / 11:
-netsh advfirewall firewall add rule name="KitchenPrint AirPrint mDNS" dir=in action=allow protocol=UDP localport=5353
-netsh advfirewall firewall add rule name="KitchenPrint IPP" dir=in action=allow protocol=TCP localport=8631
-netsh advfirewall firewall add rule name="KitchenPrint Web UI" dir=in action=allow protocol=TCP localport=5000
+Install to default location. SmartLaunch.bat auto-detects it.
 
-Windows XP (use these instead):
-netsh firewall add portopening UDP 5353 "KitchenPrint mDNS" ENABLE ALL
-netsh firewall add portopening TCP 8631 "KitchenPrint IPP" ENABLE ALL
-netsh firewall add portopening TCP 5000 "KitchenPrint Web" ENABLE ALL
+Without Ghostscript, the PDF pipeline still works for text-based PDFs
+using pypdf and pdfplumber (both installed automatically).
+
+
+STEP 6 - Install your kitchen printers in Windows
+---------------------------------------------------
+Before configuring KitchenPrint-Pro, make sure the printers are
+added in Windows (Control Panel -> Devices and Printers).
+
+To list all installed printer names, open a command prompt and run:
+  python -c "import win32print; print('\n'.join(str(p[2]) for p in win32print.EnumPrinters(2)))"
+
+Copy the exact printer name (spelling and spacing matter).
+
+
+STEP 7 - Configure printers in the web app
+-------------------------------------------
+After SmartLaunch.bat starts the server, open a browser on the PC:
+  http://127.0.0.1:5000
+
+1. Click the gear/settings icon
+2. Set:
+   - Kitchen Printer  = your kitchen printer (exact Windows name)
+   - Sushi Printer    = your sushi printer
+   - Packer Printer   = your full-order / original printer
+3. Save settings
+
+
+STEP 8 - Find the PC LAN IP address
+-------------------------------------
+Open a command prompt and run:
+  ipconfig
+
+Look for "IPv4 Address" under your active network adapter (Ethernet or Wi-Fi).
+Example: 192.168.1.50
+
+The web app is accessible from any device on the same network at:
+  http://192.168.1.50:5000
+
+Replace 192.168.1.50 with the actual IP of MCPOSE.
+
+
+STEP 9 - Connect iPhone/iPad for AirPrint
+------------------------------------------
+1. iPhone/iPad must be on the SAME Wi-Fi / LAN as MCPOSE
+2. Open Uber Eats / DoorDash / Grubhub app on the iPad
+3. Open an order and tap Print
+4. The printer "KitchenPrintPro" should appear
+5. Select it and print
+6. The order appears in Incoming Orders on the web UI
+7. Tap Accept to print to the kitchen
+
+
+STEP 10 - If AirPrint printer does not show on iPad
+-----------------------------------------------------
+The firewall ports should be opened automatically by SmartLaunch.bat.
+If AirPrint still does not show, run these manually as Administrator:
+
+  netsh advfirewall firewall add rule name="KitchenPrint IPP" dir=in action=allow protocol=TCP localport=8631
+  netsh advfirewall firewall add rule name="KitchenPrint Web" dir=in action=allow protocol=TCP localport=5000
+  netsh advfirewall firewall add rule name="KitchenPrint RAW9100" dir=in action=allow protocol=TCP localport=9100
+  netsh advfirewall firewall add rule name="KitchenPrint mDNS" dir=in action=allow protocol=UDP localport=5353
 
 Then:
-- reconnect Wi-Fi on the iPhone/iPad
-- restart KitchenPrint-Pro
-- test printing again
+  - Reconnect Wi-Fi on iPad
+  - Restart SmartLaunch.bat
+  - Try printing again
 
-Step 11: Optional verification commands
-Check the web port and IPP port are listening:
+On Windows Embedded Standard, also run the legacy netsh command:
+  netsh firewall add portopening TCP 8631 "KitchenPrint IPP" ENABLE ALL
+  netsh firewall add portopening UDP 5353 "KitchenPrint mDNS" ENABLE ALL
 
-netstat -ano | findstr ":5000 :8631"
 
-You should see 5000 and 8631 in LISTENING state.
+STEP 11 - Verify everything is running
+----------------------------------------
+Check ports are open (in command prompt):
+  netstat -ano | findstr ":5000"
+  netstat -ano | findstr ":8631"
 
-Check the app is reachable from the browser:
+Both should show LISTENING.
 
-http://127.0.0.1:5000
+Check web app:
+  http://127.0.0.1:5000
 
-Step 12: If printing reaches the app but fails on the PC
-That means AirPrint discovery is working, but the selected Windows printer name is wrong or missing.
-In that case, install/configure the real kitchen printer in Windows and then set the printer names inside KitchenPrint-Pro settings.
 
-Summary of what was actually done on this PC
-1. Confirmed Python was installed
-2. Installed Python dependencies from requirements.txt
-3. Checked the PC LAN IPv4 address
-4. Checked the correct InterfaceIndex for the Wi-Fi adapter
-5. Started app.py with:
-   - PRINT_CAPTURE_MDNS_HOST
-   - PRINT_CAPTURE_INTERFACE_INDEX
-   - PRINT_CAPTURE_AIRPRINT_NAME
-6. Confirmed the app was listening on:
-   - TCP 5000
-   - TCP 8631
-7. Confirmed AirPrint mDNS was advertised as KitchenPrintPro
+PDF PARSING - How it works on MCPOSE (32-bit Win7)
+====================================================
+Order PDFs received via AirPrint go through 4 steps in order:
 
-Exact startup template to reuse on any restaurant PC
+1. pypdf         - pure Python text extraction (fastest, works on all PDFs)
+2. pdfplumber    - pure Python, better layout analysis (backup text extractor)
+3. Ghostscript   - renders PDF pages to images, then Tesseract reads them
+                   (requires Ghostscript 32-bit installed - see Step 5)
+4. pymupdf/fitz  - last resort renderer (may not work on 32-bit Win7)
 
-cd "C:\Path\To\KitchenPrint-Pro"
-python -m pip install -r requirements.txt
+For MCPOSE (32-bit Win7), steps 1 and 2 handle most order PDFs.
+Steps 3 and 4 are used only if the PDF is image-based (scanned).
 
-Then just double-click SmartLaunch.bat (it auto-detects the LAN IP).
 
-Or manually in PowerShell:
-$env:PRINT_CAPTURE_AIRPRINT_NAME="KitchenPrintPro"
-$env:PRINT_CAPTURE_USE_NATIVE_MDNS="1"
-python .\app.py
+REQUIRED DOWNLOADS SUMMARY FOR MCPOSE
+=======================================
+All must be 32-bit versions:
 
-On Windows XP without PowerShell, open a command prompt:
-set PRINT_CAPTURE_AIRPRINT_NAME=KitchenPrintPro
-set PRINT_CAPTURE_USE_NATIVE_MDNS=1
-python app.py
+1. Python 3.8.10 (32-bit)
+   https://www.python.org/ftp/python/3.8.10/python-3.8.10.exe
+
+2. Tesseract OCR (32-bit, for PDF OCR)
+   https://github.com/UB-Mannheim/tesseract/wiki
+   -> Download tesseract-ocr-w32-setup-*.exe
+
+3. Ghostscript (32-bit, for image-based PDFs)
+   https://github.com/ArtifexSoftware/ghostpdl-downloads/releases
+   -> Download gs*.w32.exe
+
+4. Bonjour for Windows (optional, for native AirPrint mDNS)
+   https://support.apple.com/downloads/bonjour-for-windows
+   -> BonjourSetup.exe
+
+
+TROUBLESHOOTING
+================
+Problem: "Python not found"
+  -> Reinstall Python 3.8.10 32-bit and check "Add Python to PATH"
+
+Problem: pip install fails for pymupdf
+  -> OK to ignore on 32-bit Win7. PDF parsing still works via pypdf + pdfplumber.
+
+Problem: PDFs arrive but orders show as UNPARSED
+  -> Install Tesseract (Step 4) and Ghostscript (Step 5)
+  -> Check data\print_jobs\*.txt to see what text was extracted
+
+Problem: AirPrint not visible on iPad
+  -> See Step 10 above (firewall ports)
+
+Problem: Printer not printing
+  -> Open http://127.0.0.1:5000 -> Settings -> verify printer names
+  -> Run the python -c "win32print..." command from Step 6 to list exact names

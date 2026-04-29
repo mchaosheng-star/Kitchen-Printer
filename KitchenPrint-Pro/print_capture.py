@@ -72,7 +72,7 @@ def get_interface_index_for_ip(ip: str) -> int:
             "-Command",
             f"(Get-NetIPAddress -AddressFamily IPv4 | Where-Object {{$_.IPAddress -eq '{target}'}} | Select-Object -First 1 -ExpandProperty InterfaceIndex)"
         ]
-        out = subprocess.check_output(ps, stderr=subprocess.DEVNULL, text=True).strip()
+        out = subprocess.check_output(ps, stderr=subprocess.DEVNULL, text=True, timeout=5).strip()
         if out.isdigit():
             return int(out)
     except Exception:
@@ -83,11 +83,14 @@ def get_interface_index_for_ip(ip: str) -> int:
             for addr in addrs:
                 if getattr(addr, "family", None) == socket.AF_INET and getattr(addr, "address", "") == target:
                     try:
-                        return socket.if_nametoindex(name)
+                        idx = getattr(socket, "if_nametoindex", None)
+                        if callable(idx):
+                            return idx(name)
                     except Exception:
-                        return 0
+                        pass
+                    return 0
     except Exception:
-        return 0
+        pass
     return 0
 
 
@@ -642,23 +645,104 @@ def extract_comment_from_text(text: str) -> str:
 
 
 def extract_text_from_pdf(path: str) -> str:
+    text = ""
+
     try:
         from pypdf import PdfReader  # type: ignore
-    except Exception:
-        PdfReader = None  # type: ignore
-    text = ""
-    if PdfReader is not None:
-        try:
-            reader = PdfReader(path)
-            text = "\n".join((page.extract_text() or "") for page in reader.pages)
-        except Exception as e:
-            logger.exception("PDF text extraction failed for %s: %s", path, e)
+        reader = PdfReader(path)
+        text = "\n".join((page.extract_text() or "") for page in reader.pages)
+    except Exception as e:
+        logger.warning("pypdf extraction failed for %s: %s", os.path.basename(path), e)
+
     if text and text.strip():
         return text
+
+    try:
+        import pdfplumber  # type: ignore
+        with pdfplumber.open(path) as pdf:
+            chunks = []
+            for page in pdf.pages[:6]:
+                try:
+                    t = page.extract_text()
+                    if t and t.strip():
+                        chunks.append(t)
+                except Exception:
+                    pass
+            text = "\n".join(chunks)
+    except Exception as e:
+        logger.warning("pdfplumber extraction failed for %s: %s", os.path.basename(path), e)
+
+    if text and text.strip():
+        return text
+
     return ocr_pdf_to_text(path)
 
 
+def _gs_exe() -> str:
+    for candidate in (
+        r"C:\Program Files\gs\gs10.03.1\bin\gswin32c.exe",
+        r"C:\Program Files\gs\gs10.02.1\bin\gswin32c.exe",
+        r"C:\Program Files\gs\gs10.01.2\bin\gswin32c.exe",
+        r"C:\Program Files\gs\gs10.00.0\bin\gswin32c.exe",
+        r"C:\Program Files\gs\gs9.56.1\bin\gswin32c.exe",
+        r"C:\Program Files (x86)\gs\gs10.03.1\bin\gswin32c.exe",
+        r"C:\Program Files (x86)\gs\gs10.02.1\bin\gswin32c.exe",
+        r"C:\Program Files (x86)\gs\gs10.01.2\bin\gswin32c.exe",
+        r"C:\Program Files (x86)\gs\gs9.56.1\bin\gswin32c.exe",
+        r"C:\Program Files (x86)\gs\gs9.55.0\bin\gswin32c.exe",
+    ):
+        if os.path.exists(candidate):
+            return candidate
+    try:
+        import shutil
+        found = shutil.which("gswin32c") or shutil.which("gswin64c") or shutil.which("gs")
+        if found:
+            return found
+    except Exception:
+        pass
+    return ""
+
+
+def _ocr_pdf_via_ghostscript(path: str) -> str:
+    gs = _gs_exe()
+    if not gs:
+        return ""
+    import tempfile
+    chunks = []
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_pattern = os.path.join(tmpdir, "page_%03d.png")
+            cmd = [
+                gs,
+                "-dBATCH", "-dNOPAUSE", "-dSAFER",
+                "-sDEVICE=png16m",
+                "-r200",
+                f"-sOutputFile={out_pattern}",
+                path,
+            ]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+            pages = sorted(
+                f for f in os.listdir(tmpdir) if f.lower().endswith(".png")
+            )
+            for name in pages[:6]:
+                try:
+                    with open(os.path.join(tmpdir, name), "rb") as f:
+                        raw = f.read()
+                    t = ocr_image_bytes(raw)
+                    if t.strip():
+                        chunks.append(t)
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.warning("Ghostscript PDF render failed for %s: %s", os.path.basename(path), e)
+    return "\n".join(chunks).strip()
+
+
 def ocr_pdf_to_text(path: str) -> str:
+    gs_text = _ocr_pdf_via_ghostscript(path)
+    if gs_text.strip():
+        return gs_text
+
     try:
         import fitz  # type: ignore
     except Exception:

@@ -8,7 +8,8 @@ pywin32==306
 ippserver==0.1.6
 zeroconf==0.47.4
 pypdf==3.17.4
-pymupdf==1.23.8
-pillow==10.2.0
+pdfplumber==0.10.3
+pymupdf==1.21.1
+pillow==9.5.0
 pytesseract==0.3.10
 psutil==5.9.8
